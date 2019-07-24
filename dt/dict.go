@@ -45,14 +45,15 @@ func newHashTable(size int64) *hashtable {
 	}
 }
 
-func (dt *Dict) Add(key string, value interface{}) bool {
+func (dt *Dict) Add(key string, value interface{}) {
 	if dt.isRehashing() {
 		dt.doRehashing(1)
 	}
 
-	idx := dt.keyIndexToPopulated(key)
-	if idx == -1 { // element already exists or something error
-		return false
+	idx, duplicated := dt.keyIndexToPopulated(key)
+	if idx == -1 { // overwrite
+		duplicated.value = value
+		return
 	}
 
 	var ht *hashtable
@@ -62,20 +63,24 @@ func (dt *Dict) Add(key string, value interface{}) bool {
 		ht = dt.hts[0]
 	}
 
-	entry := Entry{
+	entry := &Entry{
 		key:   key,
 		value: value,
+		next:  nil,
 	}
-	// 放在末尾, 或者代替链表中相等的key
-	exist := ht.table[idx]
-	if exist == nil {
-		ht.table[idx] = &entry
+
+	he := ht.table[idx]
+	if he == nil {
+		ht.table[idx] = entry
 	} else {
-		exist.next = &entry
+		prev := he
+		for he != nil {
+			prev = he
+			he = he.next
+		}
+		prev.next = entry
 	}
 	ht.used++
-
-	return true
 }
 
 func (dt *Dict) Get(key string) *Entry {
@@ -188,6 +193,7 @@ func (dt *Dict) GetRandomKey() *Entry {
 			s0 := dt.hts[0].size
 			s1 := dt.hts[1].size
 
+			// FIXME: lack of Randomness
 			randIdx := dt.rehashIndex + rand.Int63()%(s1+s0-dt.rehashIndex)
 			if randIdx >= s0 {
 				entry = dt.hts[1].table[randIdx-s0]
@@ -212,6 +218,7 @@ func (dt *Dict) GetRandomKey() *Entry {
 	n := rand.Int() % len
 	for n > 0 {
 		entry = entry.next
+		n--
 	}
 	return entry
 }
@@ -252,11 +259,11 @@ func (dt *Dict) Delete(key string) interface{} {
 	return nil
 }
 
-func (dt *Dict) keyIndexToPopulated(key string) int64 {
-	var idx int64 = -1
+func (dt *Dict) keyIndexToPopulated(key string) (int64, *Entry) {
+	var idx int64
 
 	if !dt.expandIfNeed() {
-		return -1
+		return -1, nil
 	}
 
 	for _, ht := range dt.hts {
@@ -265,7 +272,7 @@ func (dt *Dict) keyIndexToPopulated(key string) int64 {
 
 		for he != nil {
 			if he.key == key {
-				return -1
+				return idx, he
 			}
 			he = he.next
 		}
@@ -275,7 +282,7 @@ func (dt *Dict) keyIndexToPopulated(key string) int64 {
 		}
 	}
 
-	return idx
+	return idx, nil
 }
 
 func (dt *Dict) expandIfNeed() bool {
@@ -303,7 +310,7 @@ func (dt *Dict) expandDict(size int64) bool {
 	nht := newHashTable(realsize)
 
 	dt.hts[1] = nht
-	dt.rehashIndex = 0 // for incremental rehashing
+	dt.rehashIndex = 0 // start rehashing
 	return true
 }
 
@@ -325,7 +332,7 @@ func (dt *Dict) doRehashing(n int) bool {
 			}
 		}
 
-		// Move all the keys in this bucket from the old to the new hash HT
+		// Move all the keys in this bucket from the old to the new HT
 		de := dt.hts[0].table[dt.rehashIndex]
 		for de != nil {
 			nextde := de.next

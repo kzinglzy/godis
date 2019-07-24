@@ -1,10 +1,10 @@
 package dt
 
 import (
-	"fmt"
+	"math"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 )
 
 func initData(d *Dict) int64 {
@@ -19,10 +19,13 @@ func initData(d *Dict) int64 {
 
 func TestDictCreate(t *testing.T) {
 	d := NewDict()
-	require.Equal(t, int64(0), d.size())
-	require.Equal(t, HtInitialSize-1, d.getMaxSizeMask())
-	require.False(t, d.isRehashing())
-	require.True(t, d.keyIndexToPopulated("nonexist") != -1)
+	assert.Equal(t, int64(0), d.size())
+	assert.Equal(t, HtInitialSize-1, d.getMaxSizeMask())
+	assert.False(t, d.isRehashing())
+
+	idx, duplicated := d.keyIndexToPopulated("foo")
+	assert.Nil(t, duplicated)
+	assert.True(t, idx != -1)
 }
 
 func TestBaseOperations(t *testing.T) {
@@ -54,26 +57,86 @@ func TestBaseOperations(t *testing.T) {
 			k: "",
 			v: 0,
 		},
+		{
+			k: "a",
+			v: "a",
+		},
+		{
+			k: "a",
+			v: "a",
+		},
+		{
+			k: "longlonglonglonglonglonglonglonglonglonglonglonglong",
+			v: -1000010000100001000,
+		},
 	}
 
 	d := NewDict()
 	for _, tC := range testCases {
 		t.Run("", func(t *testing.T) {
 			d.Add(tC.k, tC.v)
-			// require.Equal(t, d.Get(tC.k).value, tC.v)
-			fmt.Println(d.Get(""))
+			assert.Equal(t, d.Get(tC.k).value, tC.v)
 		})
 	}
+
 }
 
-// func TestkeyIndexToPopulated(T *testing.T) {
+func TestDictRehashing(t *testing.T) {
+	d := NewDict()
+	n := int(math.Pow(2, 20))
+	for i := 0; i < n; i++ {
+		d.Add(string(i), i)
+	}
 
-// }
+	assert.False(t, d.isRehashing())
+	assert.Equal(t, int64(n), d.size())
 
-// func TestDictRehashing(t *testing.T) {
+	d.Add("lastElementToRehashing", 1)
+	assert.True(t, d.isRehashing())
 
-// }
+	preRehashIDX := d.rehashIndex
+	d.Get("1") // trigger a step rehashing
+	assert.True(t, d.rehashIndex > preRehashIDX)
 
-// func TestDictGetRandomKeys(t *testing.T) {
+	d.doRehashing(int(d.hts[0].size - d.rehashIndex))
+	assert.False(t, d.isRehashing())
+	assert.Equal(t, HtInitialSize, d.hts[1].size)
+	assert.Equal(t, int64(0), d.hts[1].used)
+	assert.Equal(t, int64(n)+1, d.hts[0].used)
+}
 
-// }
+func TestDelete(t *testing.T) {
+	d := NewDict()
+	n := 100000
+	for i := 0; i < n; i++ {
+		d.Add(string(i), i)
+	}
+
+	for i := 0; i < n; i += 2 {
+		d.Delete(string(i))
+	}
+
+	assert.Equal(t, int64(n/2), d.size())
+}
+
+func TestDictGetRandomKeys(t *testing.T) {
+	d := NewDict()
+	n := 1000000
+	for i := 0; i < n; i++ {
+		d.Add(string(i), i)
+	}
+
+	j := n / 2
+	m := make(map[string]bool)
+	duplicated := 0
+	for i := 0; i < j; i++ {
+		key := d.GetRandomKey().key
+		if _, found := m[key]; found {
+			duplicated++
+		} else {
+			m[key] = true
+		}
+	}
+
+	d.GetSomeKeys(int64(j))
+}
