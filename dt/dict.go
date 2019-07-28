@@ -23,8 +23,8 @@ type hashtable struct {
 }
 
 type Entry struct {
-	key   string
-	value interface{}
+	Key   string
+	Value interface{}
 	next  *Entry
 }
 
@@ -52,7 +52,7 @@ func (dt *Dict) Add(key string, value interface{}) {
 
 	idx, duplicated := dt.keyIndexToPopulated(key)
 	if idx == -1 { // overwrite
-		duplicated.value = value
+		duplicated.Value = value
 		return
 	}
 
@@ -64,8 +64,8 @@ func (dt *Dict) Add(key string, value interface{}) {
 	}
 
 	entry := &Entry{
-		key:   key,
-		value: value,
+		Key:   key,
+		Value: value,
 		next:  nil,
 	}
 
@@ -84,7 +84,7 @@ func (dt *Dict) Add(key string, value interface{}) {
 }
 
 func (dt *Dict) Get(key string) *Entry {
-	if dt.size() == 0 {
+	if dt.Size() == 0 {
 		return nil
 	}
 
@@ -97,7 +97,7 @@ func (dt *Dict) Get(key string) *Entry {
 		he := ht.table[idx]
 
 		for he != nil {
-			if he.key == key {
+			if he.Key == key {
 				return he
 			}
 			he = he.next
@@ -113,7 +113,7 @@ func (dt *Dict) Get(key string) *Entry {
 
 // GetSomeKeys samples the dictionary to return a few keys from random locations
 func (dt *Dict) GetSomeKeys(count int64) []*Entry {
-	if size := dt.size(); count > size {
+	if size := dt.Size(); count > size {
 		count = size
 	}
 
@@ -179,7 +179,7 @@ func (dt *Dict) GetSomeKeys(count int64) []*Entry {
 }
 
 func (dt *Dict) GetRandomKey() *Entry {
-	if dt.size() == 0 {
+	if dt.Size() == 0 {
 		return nil
 	}
 
@@ -224,7 +224,7 @@ func (dt *Dict) GetRandomKey() *Entry {
 }
 
 func (dt *Dict) Delete(key string) interface{} {
-	if dt.size() == 0 {
+	if dt.Size() == 0 {
 		return nil
 	}
 
@@ -238,14 +238,14 @@ func (dt *Dict) Delete(key string) interface{} {
 
 		var prevHe *Entry
 		for he != nil {
-			if he.key == key {
+			if he.Key == key {
 				if prevHe != nil {
 					prevHe.next = he.next
 				} else {
 					ht.table[idx] = he.next
 				}
 				ht.used--
-				return he.value
+				return he.Value
 			}
 			prevHe = he
 			he = he.next
@@ -257,6 +257,10 @@ func (dt *Dict) Delete(key string) interface{} {
 	}
 
 	return nil
+}
+
+func (dt *Dict) Size() int64 {
+	return dt.hts[0].used + dt.hts[1].used
 }
 
 func (dt *Dict) keyIndexToPopulated(key string) (int64, *Entry) {
@@ -271,7 +275,7 @@ func (dt *Dict) keyIndexToPopulated(key string) (int64, *Entry) {
 		he := ht.table[idx]
 
 		for he != nil {
-			if he.key == key {
+			if he.Key == key {
 				return idx, he
 			}
 			he = he.next
@@ -337,7 +341,7 @@ func (dt *Dict) doRehashing(n int) bool {
 		for de != nil {
 			nextde := de.next
 
-			idx := dt.hash(de.key) & dt.hts[1].sizemask
+			idx := dt.hash(de.Key) & dt.hts[1].sizemask
 			de.next = dt.hts[1].table[idx]
 			dt.hts[1].table[idx] = de
 			dt.hts[0].used--
@@ -374,10 +378,6 @@ func (dt *Dict) nextPower(size int64) int64 {
 
 func (dt *Dict) isRehashing() bool {
 	return dt.rehashIndex != -1
-}
-
-func (dt *Dict) size() int64 {
-	return dt.hts[0].used + dt.hts[1].used
 }
 
 func (dt *Dict) hash(k string) int64 {

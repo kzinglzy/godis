@@ -1,6 +1,6 @@
 package protocol
 
-/* highly steal from git@github.com:secmask/go-redisproto.git
+/* highly steal and modify from git@github.com:secmask/go-redisproto.git
  */
 
 import (

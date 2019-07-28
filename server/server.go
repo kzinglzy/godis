@@ -3,8 +3,6 @@ package server
 import (
 	"log"
 	"net"
-
-	"github.com/kzinglzy/godis/dt"
 )
 
 // Server .
@@ -15,52 +13,72 @@ type Server struct {
 	listener net.Listener
 
 	clients []*Client
+
+	dirty       int
+	rdbChildPid int
+	aofChildPid int
 }
 
-// Database implements the kv service
-type Database struct {
-	store   *dt.Dict
-	expires *dt.Dict
-}
+var godisServer *Server
 
 // MakeServer .
 func MakeServer(addr string) (*Server, error) {
-	db := &Database{
-		store:   dt.NewDict(),
-		expires: dt.NewDict(),
-	}
-
+	InitEvictionPoolEntry()
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Panicf("Failed listening at %s", addr)
 	}
-	InitEvictionPoolEntry()
-	server := Server{
-		addr:     addr,
-		db:       db,
-		listener: listener,
+
+	server := &Server{
+		addr:        addr,
+		db:          NewDatabase(),
+		listener:    listener,
+		rdbChildPid: -1,
+		aofChildPid: -1,
 	}
-	return &server, nil
+	godisServer = server
+	return server, nil
 }
 
+// Run .
 func (s *Server) Run() {
-	go s.serverCron()
+	log.Printf("Running godis server at %s", s.addr)
 
+	go s.serverCron()
 	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
 			log.Println("Error on accept connection: ", err)
 			continue
 		}
-		go s.handleRequest(&conn)
+		go s.handleClient(conn)
 	}
 
+}
+
+func (s *Server) addClients(c *Client) {
+	s.clients = append(s.clients, c)
 }
 
 func (s *Server) serverCron() {
 
 }
 
-func (s *Server) handleRequest(net *net.Conn) {
+func (s *Server) isSaving() bool {
+	return s.rdbChildPid == -1 && s.aofChildPid == -1
+}
 
+func (s *Server) handleClient(conn net.Conn) {
+	client := NewClient(conn)
+	client.SetDatabase(s.db)
+	defer client.Close()
+	s.addClients(client)
+
+	for req := range client.Requests() {
+		cmd := LoopupCommand(req.CommandName())
+		err := cmd.Exec(client, req)
+		if err != nil {
+			log.Printf("failed to exec command %s, err: %v", cmd, err)
+		}
+	}
 }

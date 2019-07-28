@@ -1,6 +1,6 @@
 package protocol
 
-/* highly steal from git@github.com:secmask/go-redisproto.git
+/* highly steal and modify from git@github.com:secmask/go-redisproto.git
  */
 
 import (
@@ -34,12 +34,13 @@ func (p *ProtocolError) Error() string {
 	return p.message
 }
 
-type Command struct {
+type Request struct {
+	cmd  string
 	argv [][]byte
 	last bool
 }
 
-func (c *Command) Get(index int) []byte {
+func (c *Request) Get(index int) []byte {
 	if index >= 0 && index < len(c.argv) {
 		return c.argv[index]
 	} else {
@@ -47,11 +48,22 @@ func (c *Command) Get(index int) []byte {
 	}
 }
 
-func (c *Command) ArgCount() int {
+func (c *Request) GetString(index int) string {
+	if index >= 0 && index < len(c.argv) {
+		return string(c.argv[index])
+	}
+	return ""
+}
+
+func (c *Request) CommandName() string {
+	return c.cmd
+}
+
+func (c *Request) ArgCount() int {
 	return len(c.argv)
 }
 
-func (c *Command) IsLast() bool {
+func (c *Request) IsLast() bool {
 	return c.last
 }
 
@@ -103,7 +115,7 @@ func (r *Parser) requireNBytes(num int) error {
 	return nil
 }
 func (r *Parser) readNumber() (int, error) {
-	var neg bool = false
+	var neg bool
 	err := r.requireNBytes(1)
 	if err != nil {
 		return 0, err
@@ -118,8 +130,8 @@ func (r *Parser) readNumber() (int, error) {
 		r.parsePosition++
 		break
 	}
-	var num uint64 = 0
-	var startpos int = r.parsePosition
+	var num uint64
+	var startpos = r.parsePosition
 OUTTER:
 	for {
 		for i := r.parsePosition; i < r.writeIndex; i++ {
@@ -158,7 +170,7 @@ func (r *Parser) discardNewLine() error {
 	return ExpectNewLine
 }
 
-func (r *Parser) parseBinary() (*Command, error) {
+func (r *Parser) parseBinary() (*Request, error) {
 	r.parsePosition++
 	numArg, err := r.readNumber()
 	if err != nil {
@@ -210,10 +222,10 @@ func (r *Parser) parseBinary() (*Command, error) {
 			return nil, e
 		}
 	}
-	return &Command{argv: argv}, nil
+	return &Request{argv: argv}, nil
 }
 
-func (r *Parser) parseTelnet() (*Command, error) {
+func (r *Parser) parseTelnet() (*Request, error) {
 	nlPos := -1
 	for {
 		nlPos = bytes.IndexByte(r.buffer, '\n')
@@ -229,7 +241,7 @@ func (r *Parser) parseTelnet() (*Command, error) {
 		}
 	}
 	r.parsePosition = r.writeIndex // we don't support pipeline in telnet mode
-	return &Command{argv: bytes.Split(r.buffer[:nlPos-1], spaceSlice)}, nil
+	return &Request{argv: bytes.Split(r.buffer[:nlPos-1], spaceSlice)}, nil
 }
 
 func (r *Parser) reset() {
@@ -238,7 +250,7 @@ func (r *Parser) reset() {
 	//r.buffer = make([]byte, len(r.buffer))
 }
 
-func (r *Parser) ReadCommand() (*Command, error) {
+func (r *Parser) ReadRequest() (*Request, error) {
 	// if the buffer is empty, try to fetch some
 	if r.parsePosition >= r.writeIndex {
 		if err := r.readSome(1); err != nil {
@@ -246,30 +258,32 @@ func (r *Parser) ReadCommand() (*Command, error) {
 		}
 	}
 
-	var cmd *Command
+	var req *Request
 	var err error
 	if r.buffer[r.parsePosition] == '*' {
-		cmd, err = r.parseBinary()
+		req, err = r.parseBinary()
 	} else {
-		cmd, err = r.parseTelnet()
+		req, err = r.parseTelnet()
 	}
 	if r.parsePosition >= r.writeIndex {
-		if cmd != nil {
-			cmd.last = true
+		if req != nil {
+			req.last = true
 		}
 		r.reset()
 	}
-	return cmd, err
+
+	req.cmd = string(req.Get(0))
+	return req, err
 }
 
-func (r *Parser) Commands() <-chan *Command {
-	cmds := make(chan *Command)
+func (r *Parser) Requests() <-chan *Request {
+	reqs := make(chan *Request)
 	go func() {
-		for cmd, err := r.ReadCommand(); err == nil; cmd, err = r.ReadCommand() {
-			cmds <- cmd
+		for req, err := r.ReadRequest(); err == nil; req, err = r.ReadRequest() {
+			reqs <- req
 		}
-		close(cmds)
+		close(reqs)
 
 	}()
-	return cmds
+	return reqs
 }

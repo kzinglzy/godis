@@ -19,7 +19,7 @@ func initData(d *Dict) int64 {
 
 func TestDictCreate(t *testing.T) {
 	d := NewDict()
-	assert.Equal(t, int64(0), d.size())
+	assert.Equal(t, int64(0), d.Size())
 	assert.Equal(t, HtInitialSize-1, d.getMaxSizeMask())
 	assert.False(t, d.isRehashing())
 
@@ -75,7 +75,7 @@ func TestBaseOperations(t *testing.T) {
 	for _, tC := range testCases {
 		t.Run("", func(t *testing.T) {
 			d.Add(tC.k, tC.v)
-			assert.Equal(t, d.Get(tC.k).value, tC.v)
+			assert.Equal(t, d.Get(tC.k).Value, tC.v)
 		})
 	}
 
@@ -89,7 +89,7 @@ func TestDictRehashing(t *testing.T) {
 	}
 
 	assert.False(t, d.isRehashing())
-	assert.Equal(t, int64(n), d.size())
+	assert.Equal(t, int64(n), d.Size())
 
 	d.Add("lastElementToRehashing", 1)
 	assert.True(t, d.isRehashing())
@@ -116,7 +116,7 @@ func TestDelete(t *testing.T) {
 		d.Delete(string(i))
 	}
 
-	assert.Equal(t, int64(n/2), d.size())
+	assert.Equal(t, int64(n/2), d.Size())
 }
 
 func TestDictGetRandomKeys(t *testing.T) {
@@ -130,7 +130,7 @@ func TestDictGetRandomKeys(t *testing.T) {
 	m := make(map[string]bool)
 	duplicated := 0
 	for i := 0; i < j; i++ {
-		key := d.GetRandomKey().key
+		key := d.GetRandomKey().Key
 		if _, found := m[key]; found {
 			duplicated++
 		} else {
