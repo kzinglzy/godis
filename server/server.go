@@ -69,6 +69,8 @@ func (s *Server) isSaving() bool {
 }
 
 func (s *Server) handleClient(conn net.Conn) {
+	log.Println("create new client")
+
 	client := NewClient(conn)
 	client.SetDatabase(s.db)
 	defer client.Close()

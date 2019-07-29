@@ -20,9 +20,9 @@ func NewDatabase() *Database {
 	}
 }
 
-// LookupKey Lookups a key, and as a side effect, if needed,
+// Get Lookups a key, and as a side effect, if needed,
 // expires the key if its TTL is reached.
-func (db *Database) LookupKey(key string) *dt.Object {
+func (db *Database) Get(key string) *dt.Object {
 	return db.lookupKey(key, true)
 }
 
@@ -52,28 +52,14 @@ func (db *Database) expireIfNeeded(key string) bool {
 	return true
 }
 
-// void setKey(redisDb *db, robj *key, robj *val)
-// {
-//     if (lookupKeyWrite(db, key) == NULL)
-//     {
-//         dbAdd(db, key, val);
-//     }
-//     else
-//     {
-//         dbOverwrite(db, key, val);
-//     }
-//     incrRefCount(val);
-//     removeExpire(db, key);
-//     signalModifiedKey(db, key);
-// }
-
-func (db *Database) setKey(key string, value *dt.Object) {
+func (db *Database) setKey(key string, obj *dt.Object) {
 	old := db.lookupKey(key, true)
 	if old == nil {
-		db.store.Add(key, value)
+		db.store.Add(key, obj)
 	} else {
-		// old.Ptr
-		value.lru = old.lru
+		old.Ptr = obj.Ptr
+		old.RefCount++
+		db.expires.Delete(key)
 	}
 }
 

@@ -50,9 +50,9 @@ func (dt *Dict) Add(key string, value interface{}) {
 		dt.doRehashing(1)
 	}
 
-	idx, duplicated := dt.keyIndexToPopulated(key)
-	if idx == -1 { // overwrite
-		duplicated.Value = value
+	idx, old := dt.keyIndexToPopulated(key)
+	if old != nil {
+		old.Value = value // overwrite
 		return
 	}
 

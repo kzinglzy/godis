@@ -2,6 +2,7 @@ package dt
 
 import (
 	"math"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -75,7 +76,7 @@ func TestBaseOperations(t *testing.T) {
 	for _, tC := range testCases {
 		t.Run("", func(t *testing.T) {
 			d.Add(tC.k, tC.v)
-			assert.Equal(t, d.Get(tC.k).Value, tC.v)
+			assert.Equal(t, tC.v, d.Get(tC.k).Value)
 		})
 	}
 
@@ -85,7 +86,7 @@ func TestDictRehashing(t *testing.T) {
 	d := NewDict()
 	n := int(math.Pow(2, 20))
 	for i := 0; i < n; i++ {
-		d.Add(string(i), i)
+		d.Add(strconv.Itoa(i), i)
 	}
 
 	assert.False(t, d.isRehashing())
@@ -109,11 +110,11 @@ func TestDelete(t *testing.T) {
 	d := NewDict()
 	n := 100000
 	for i := 0; i < n; i++ {
-		d.Add(string(i), i)
+		d.Add(strconv.Itoa(i), i)
 	}
 
 	for i := 0; i < n; i += 2 {
-		d.Delete(string(i))
+		d.Delete(strconv.Itoa(i))
 	}
 
 	assert.Equal(t, int64(n/2), d.Size())
@@ -123,7 +124,7 @@ func TestDictGetRandomKeys(t *testing.T) {
 	d := NewDict()
 	n := 1000000
 	for i := 0; i < n; i++ {
-		d.Add(string(i), i)
+		d.Add(strconv.Itoa(i), i)
 	}
 
 	j := n / 2

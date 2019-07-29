@@ -45,18 +45,18 @@ func (c *Client) ReplyEmpty() error {
 	return err
 }
 
-func (c *Client) ReplyBulk(s []string) error {
-	err := c.writer.WriteBulkStrings(s)
+func (c *Client) Reply(s string) error {
+	err := c.writer.WriteSimpleString(s)
 	if err != nil {
-		log.Printf("failed to write bulk strings %v", err)
+		log.Printf("failed to write string %v", err)
 	}
 	return err
 }
 
-func (c *Client) Reply(v ...interface{}) error {
+func (c *Client) ReplyBulk(v ...interface{}) error {
 	err := c.writer.WriteObjects(v...)
 	if err != nil {
-		log.Printf("failed to write object %v, %v", v, err)
+		log.Printf("failed to write objects %v, %v", v, err)
 	}
 	return err
 }

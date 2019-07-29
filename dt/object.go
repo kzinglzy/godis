@@ -1,10 +1,12 @@
 package dt
 
+import "time"
+
 // Object .
 type Object struct {
 	ObjType  uint8
 	Encoding uint8
-	Lru      uint64
+	Lru      int64
 	RefCount uint
 	Ptr      interface{}
 }
@@ -25,3 +27,14 @@ const (
 	ObjEncodingLinkedlist
 	ObjEncodingSkiplist
 )
+
+// NewObj .
+func NewObj(t uint8, v interface{}) *Object {
+	return &Object{
+		ObjType:  t,
+		Encoding: ObjEncodingRaw,
+		Lru:      time.Now().Unix(),
+		RefCount: 1,
+		Ptr:      v,
+	}
+}

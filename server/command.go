@@ -2,8 +2,8 @@ package server
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
-	"time"
 
 	"github.com/kzinglzy/godis/dt"
 	"github.com/kzinglzy/godis/protocol"
@@ -39,7 +39,7 @@ func (*unknownCommand) Exec(c *Client, r *protocol.Request) error {
 }
 
 func (*cmdGet) Exec(c *Client, r *protocol.Request) error {
-	v := c.db.LookupKey(r.GetString(1))
+	v := c.db.Get(r.GetString(1))
 	if v == nil {
 		return c.ReplyEmpty()
 	}
@@ -47,20 +47,25 @@ func (*cmdGet) Exec(c *Client, r *protocol.Request) error {
 	if v.ObjType != dt.ObjString {
 		return c.Reply(fmt.Sprintf("get wrong type, excepted %d, actually %d", dt.ObjString, v.ObjType))
 	}
-
-	return c.Reply(v.Ptr)
+	return c.Reply(v.Ptr.(string))
 }
 
 // SET key value [EX <seconds>]
 func (*cmdSet) Exec(c *Client, r *protocol.Request) error {
-	key, value, ex := r.GetString(1), r.GetString(2), r.GetString(3)
-
-	var when int64
-	if ex != "" {
-		when = time.Now().UnixNano() / int64(time.Millisecond)
-	} else {
-		when = -1
+	if r.ArgCount() < 3 {
+		return c.ReplyError("wrong number of arguments for 'set' command")
 	}
 
-	return nil
+	key, value, expire := r.GetString(1), r.GetString(2), r.GetString(3)
+
+	obj := dt.NewObj(dt.ObjString, value)
+	c.db.setKey(key, obj)
+	godisServer.dirty++
+
+	if ex, err := strconv.ParseInt(expire, 10, 64); err != nil {
+		when := mstime() + ex
+		c.db.setExpire(key, when)
+	}
+
+	return c.Reply("OK")
 }
