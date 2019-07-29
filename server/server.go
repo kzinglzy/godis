@@ -23,7 +23,6 @@ var godisServer *Server
 
 // MakeServer .
 func MakeServer(addr string) (*Server, error) {
-	InitEvictionPoolEntry()
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Panicf("Failed listening at %s", addr)
@@ -56,10 +55,6 @@ func (s *Server) Run() {
 
 }
 
-func (s *Server) addClients(c *Client) {
-	s.clients = append(s.clients, c)
-}
-
 func (s *Server) serverCron() {
 
 }
@@ -74,7 +69,7 @@ func (s *Server) handleClient(conn net.Conn) {
 	client := NewClient(conn)
 	client.SetDatabase(s.db)
 	defer client.Close()
-	s.addClients(client)
+	s.clients = append(s.clients, client)
 
 	for req := range client.Requests() {
 		cmd := LoopupCommand(req.CommandName())

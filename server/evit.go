@@ -26,6 +26,10 @@ type EvictionPoolEntry struct {
 
 var evictionPoolEntry *EvictionPoolEntry
 
+func init() {
+	InitEvictionPoolEntry()
+}
+
 // InitEvictionPoolEntry Creates a new eviction pool
 func InitEvictionPoolEntry() {
 

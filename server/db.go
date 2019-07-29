@@ -1,8 +1,6 @@
 package server
 
 import (
-	"time"
-
 	"github.com/kzinglzy/godis/dt"
 )
 
@@ -26,7 +24,7 @@ func (db *Database) Get(key string) *dt.Object {
 	return db.lookupKey(key, true)
 }
 
-func (db *Database) lookupKey(key string, applyMemoryPolicy bool) *dt.Object {
+func (db *Database) lookupKey(key string, touch bool) *dt.Object {
 	if db.expireIfNeeded(key) {
 		return nil
 	}
@@ -37,7 +35,7 @@ func (db *Database) lookupKey(key string, applyMemoryPolicy bool) *dt.Object {
 	}
 
 	val := de.Value.(*dt.Object)
-	if !godisServer.isSaving() && !applyMemoryPolicy {
+	if !godisServer.isSaving() && touch {
 		db.updateLRU(val)
 	}
 	return val
@@ -74,7 +72,7 @@ func (db *Database) keyIsExpired(key string) bool {
 		return false
 	}
 
-	return time.Now().UnixNano()/int64(time.Millisecond) > when
+	return mstime() > when
 }
 
 func (db *Database) getExpire(key string) int64 {
@@ -87,6 +85,24 @@ func (db *Database) getExpire(key string) int64 {
 
 func (db *Database) setExpire(key string, when int64) {
 	db.expires.Add(key, when)
+}
+
+func (db *Database) ttl(key string) int64 {
+	if db.lookupKey(key, false) == nil {
+		return -2
+	}
+
+	var ttl int64
+	expire := db.getExpire(key)
+	if expire != -1 {
+		ttl = expire - mstime()
+		if ttl < 0 {
+			ttl = 0
+		}
+		return (ttl + 500) / 1000
+	}
+
+	return -1
 }
 
 func (db *Database) updateLRU(o *dt.Object) {

@@ -13,7 +13,13 @@ import (
 var CommandTable = map[string]Command{
 	"get": new(cmdGet),
 	"set": new(cmdSet),
+	"ttl": new(cmdTTL),
 }
+
+type unknownCommand struct{}
+type cmdSet struct{}
+type cmdGet struct{}
+type cmdTTL struct{}
 
 // Command .
 type Command interface {
@@ -29,10 +35,6 @@ func LoopupCommand(name string) Command {
 	}
 	return cmd
 }
-
-type unknownCommand struct{}
-type cmdSet struct{}
-type cmdGet struct{}
 
 func (*unknownCommand) Exec(c *Client, r *protocol.Request) error {
 	return c.ReplyError("unknown command")
@@ -62,10 +64,15 @@ func (*cmdSet) Exec(c *Client, r *protocol.Request) error {
 	c.db.setKey(key, obj)
 	godisServer.dirty++
 
-	if ex, err := strconv.ParseInt(expire, 10, 64); err != nil {
-		when := mstime() + ex
+	if ex, err := strconv.ParseInt(expire, 10, 64); expire != "" && err == nil {
+		when := mstime() + ex*1000
 		c.db.setExpire(key, when)
 	}
 
 	return c.Reply("OK")
+}
+
+func (*cmdTTL) Exec(c *Client, r *protocol.Request) error {
+	key := r.GetString(1)
+	return c.Reply(fmt.Sprintf("%d", c.db.ttl(key)))
 }
