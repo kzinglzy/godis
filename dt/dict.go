@@ -3,6 +3,7 @@ package dt
 import (
 	"hash/fnv"
 	"math/rand"
+	"time"
 )
 
 const (
@@ -46,7 +47,7 @@ func newHashTable(size int64) *hashtable {
 }
 
 func (dt *Dict) Add(key string, value interface{}) {
-	if dt.isRehashing() {
+	if dt.IsRehashing() {
 		dt.doRehashing(1)
 	}
 
@@ -57,7 +58,7 @@ func (dt *Dict) Add(key string, value interface{}) {
 	}
 
 	var ht *hashtable
-	if dt.isRehashing() {
+	if dt.IsRehashing() {
 		ht = dt.hts[1]
 	} else {
 		ht = dt.hts[0]
@@ -84,11 +85,11 @@ func (dt *Dict) Add(key string, value interface{}) {
 }
 
 func (dt *Dict) Get(key string) *Entry {
-	if dt.Size() == 0 {
+	if dt.Used() == 0 {
 		return nil
 	}
 
-	if dt.isRehashing() {
+	if dt.IsRehashing() {
 		dt.doRehashing(1)
 	}
 
@@ -103,7 +104,7 @@ func (dt *Dict) Get(key string) *Entry {
 			he = he.next
 		}
 
-		if !dt.isRehashing() {
+		if !dt.IsRehashing() {
 			break
 		}
 	}
@@ -113,16 +114,16 @@ func (dt *Dict) Get(key string) *Entry {
 
 // GetSomeKeys samples the dictionary to return a few keys from random locations
 func (dt *Dict) GetSomeKeys(count int64) []*Entry {
-	if size := dt.Size(); count > size {
+	if size := dt.Used(); count > size {
 		count = size
 	}
 
-	if dt.isRehashing() {
+	if dt.IsRehashing() {
 		dt.doRehashing(int(count))
 	}
 
 	tables := 1
-	if dt.isRehashing() {
+	if dt.IsRehashing() {
 		tables = 2
 	}
 	maxsizemask := dt.getMaxSizeMask()
@@ -179,16 +180,16 @@ func (dt *Dict) GetSomeKeys(count int64) []*Entry {
 }
 
 func (dt *Dict) GetRandomKey() *Entry {
-	if dt.Size() == 0 {
+	if dt.Used() == 0 {
 		return nil
 	}
 
-	if dt.isRehashing() {
+	if dt.IsRehashing() {
 		dt.doRehashing(1)
 	}
 
 	var entry *Entry
-	if dt.isRehashing() {
+	if dt.IsRehashing() {
 		for entry == nil {
 			s0 := dt.hts[0].size
 			s1 := dt.hts[1].size
@@ -224,11 +225,11 @@ func (dt *Dict) GetRandomKey() *Entry {
 }
 
 func (dt *Dict) Delete(key string) interface{} {
-	if dt.Size() == 0 {
+	if dt.Used() == 0 {
 		return nil
 	}
 
-	if dt.isRehashing() {
+	if dt.IsRehashing() {
 		dt.doRehashing(1)
 	}
 
@@ -251,7 +252,7 @@ func (dt *Dict) Delete(key string) interface{} {
 			he = he.next
 		}
 
-		if !dt.isRehashing() {
+		if !dt.IsRehashing() {
 			break
 		}
 	}
@@ -259,8 +260,12 @@ func (dt *Dict) Delete(key string) interface{} {
 	return nil
 }
 
-func (dt *Dict) Size() int64 {
+func (dt *Dict) Used() int64 {
 	return dt.hts[0].used + dt.hts[1].used
+}
+
+func (dt *Dict) Size() int64 {
+	return dt.hts[0].size + dt.hts[1].size
 }
 
 func (dt *Dict) keyIndexToPopulated(key string) (int64, *Entry) {
@@ -281,7 +286,7 @@ func (dt *Dict) keyIndexToPopulated(key string) (int64, *Entry) {
 			he = he.next
 		}
 
-		if !dt.isRehashing() {
+		if !dt.IsRehashing() {
 			break
 		}
 	}
@@ -290,7 +295,7 @@ func (dt *Dict) keyIndexToPopulated(key string) (int64, *Entry) {
 }
 
 func (dt *Dict) expandIfNeed() bool {
-	if dt.isRehashing() {
+	if dt.IsRehashing() {
 		return true // expand succeed
 	}
 
@@ -306,7 +311,7 @@ func (dt *Dict) expandIfNeed() bool {
 }
 
 func (dt *Dict) expandDict(size int64) bool {
-	if dt.isRehashing() || dt.hts[0].used > size {
+	if dt.IsRehashing() || dt.hts[0].used > size {
 		return false
 	}
 
@@ -320,7 +325,7 @@ func (dt *Dict) expandDict(size int64) bool {
 
 // Performs N steps of incremental rehashing
 func (dt *Dict) doRehashing(n int) bool {
-	if !dt.isRehashing() {
+	if !dt.IsRehashing() {
 		return false // not need to rehashing
 	}
 
@@ -366,6 +371,19 @@ func (dt *Dict) doRehashing(n int) bool {
 	return true
 }
 
+// RehashingMillseconds Rehashing for an amount of time between ms milliseconds and ms+1 milliseconds
+func (dt *Dict) RehashingMillseconds(ms int64) int {
+	start := time.Now().UnixNano() / int64(time.Millisecond)
+	rehashes := 0
+	for dt.doRehashing(100) {
+		rehashes += 100
+		if time.Now().UnixNano()/int64(time.Millisecond)-start > ms {
+			break
+		}
+	}
+	return rehashes
+}
+
 func (dt *Dict) nextPower(size int64) int64 {
 	i := HtInitialSize
 	for {
@@ -376,7 +394,7 @@ func (dt *Dict) nextPower(size int64) int64 {
 	}
 }
 
-func (dt *Dict) isRehashing() bool {
+func (dt *Dict) IsRehashing() bool {
 	return dt.rehashIndex != -1
 }
 
@@ -388,7 +406,7 @@ func (dt *Dict) hash(k string) int64 {
 
 func (dt *Dict) getMaxSizeMask() int64 {
 	maxsizemask := dt.hts[0].sizemask
-	if dt.isRehashing() {
+	if dt.IsRehashing() {
 		if ms := dt.hts[1].sizemask; ms > maxsizemask {
 			maxsizemask = ms
 		}

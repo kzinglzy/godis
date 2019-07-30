@@ -1,6 +1,8 @@
 package server
 
 import (
+	"log"
+
 	"github.com/kzinglzy/godis/dt"
 )
 
@@ -107,4 +109,69 @@ func (db *Database) ttl(key string) int64 {
 
 func (db *Database) updateLRU(o *dt.Object) {
 	// TODO memory Policy
+}
+
+func (db *Database) showInfo() {
+	log.Printf("%d keys (%d volatile) in %d slots HT", db.store.Used(), db.expires.Used(), db.store.Size())
+}
+
+func (db *Database) doExpireCycle() {
+	num := db.expires.Used()
+	if num == 0 {
+		return
+	}
+
+	size := db.expires.Size()
+	// there are less than 1% filled slots
+	if num > 0 && size > dt.HtInitialSize && num*100/size < 1 {
+		return
+	}
+	if num > ActiveExpireCycleLookupsPerLoop {
+		num = ActiveExpireCycleLookupsPerLoop
+	}
+
+	start := ustime()
+	now := mstime()
+	var expired int64
+	for {
+		expired = 0
+		for num > 0 {
+			num--
+
+			de := db.expires.GetRandomKey()
+			if de == nil {
+				break
+			}
+
+			ttl := de.Value.(int64) - now
+			if ttl <= 0 {
+				log.Print("expire key ", de.Key)
+				db.deleteKey(de.Key)
+				expired++
+			}
+		}
+
+		if ustime()-start > MaxCycleTimeLimitUSPerLoop {
+			break
+		}
+
+		// stop cycle if there are less than 25% of keys found expired
+		if expired <= ActiveExpireCycleLookupsPerLoop/4 {
+			break
+		}
+	}
+}
+
+func (db *Database) incrementallyRehash() bool {
+	if db.store.IsRehashing() {
+		db.store.RehashingMillseconds(1)
+		return true
+	}
+
+	if db.expires.IsRehashing() {
+		db.expires.RehashingMillseconds(1)
+		return true
+	}
+
+	return false
 }

@@ -3,6 +3,7 @@ package server
 import (
 	"log"
 	"net"
+	"time"
 
 	"github.com/kzinglzy/godis/protocol"
 )
@@ -17,9 +18,10 @@ type Server struct {
 	events  chan *IOEvent
 	clients []*Client
 
-	dirty       int
-	rdbChildPid int
-	aofChildPid int
+	dirty               int
+	rdbChildPid         int
+	aofChildPid         int
+	aofRewriteScheduled bool
 }
 
 var godisServer *Server
@@ -52,7 +54,6 @@ func MakeServer(addr string) (*Server, error) {
 // Run .
 func (s *Server) Run() {
 	log.Printf("Running godis server at %s", s.addr)
-
 	go s.handleConnection()
 
 	// event loop
@@ -62,26 +63,52 @@ func (s *Server) Run() {
 	}
 }
 
-func (s *Server) processTimeEvent() {
-	// clientsCron
-	// databasesCron
-	// rewrite aof
-	// flushAppendOnlyFile
-}
-
 func (s *Server) processIOEvent() {
 	n := 0
-	for e := range s.events {
+	scheduled := false
+
+	select {
+	case <-time.After(time.Millisecond):
+		scheduled = true
+	case e := <-s.events:
 		cmd := LoopupCommand(e.r.CommandName())
 		err := cmd.Exec(e.c, e.r)
 		if err != nil {
 			log.Printf("failed to exec command %s, err: %v", cmd, err)
 		}
 		n++
-		if n >= MaxNumEventsPerLoop {
+		if n >= MaxNumEventsPerLoop || scheduled {
 			return
 		}
 	}
+}
+
+func (s *Server) processTimeEvent() {
+	// s.db.showInfo()
+
+	s.clientsCron()
+	s.databasesCron()
+	s.rewriteAOFBackgroundIfNeed()
+	// save rdb
+	// flush aof
+}
+
+func (s *Server) databasesCron() {
+	s.db.doExpireCycle()
+	s.db.incrementallyRehash()
+}
+
+func (s *Server) clientsCron() {
+	// check max idle time
+	// check expansive client
+}
+
+func (s *Server) rewriteAOFBackgroundIfNeed() {
+	if s.isSaving() || !s.aofRewriteScheduled {
+		return
+	}
+
+	// TODO
 }
 
 func (s *Server) handleConnection() {
@@ -96,7 +123,7 @@ func (s *Server) handleConnection() {
 }
 
 func (s *Server) isSaving() bool {
-	return s.rdbChildPid == -1 && s.aofChildPid == -1
+	return s.rdbChildPid != -1 && s.aofChildPid != -1
 }
 
 func (s *Server) handleClient(conn net.Conn) {

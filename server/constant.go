@@ -1,5 +1,8 @@
 package server
 
-var (
-	MaxNumEventsPerLoop = 100
+const (
+	MaxNumEventsPerLoop             = 100
+	ActiveExpireCycleLookupsPerLoop = 20
+
+	MaxCycleTimeLimitUSPerLoop = 25000 // us
 )
