@@ -1,0 +1,3 @@
+# Go Dictionary Service
+
+WIP
